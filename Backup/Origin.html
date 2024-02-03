@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" id="vp" content="initial-scale=1.0,user-scalable=no,maximum-scale=1,width=device-width" />
+    <meta charset="utf-8" />
+
+    <link rel="stylesheet" href="https://api.mazemap.com/js/v2.0.103/mazemap.min.css">
+    <script type='text/javascript' src='https://api.mazemap.com/js/v2.0.103/mazemap.min.js'></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.42857143; overflow: hidden; }
+        #map { width: 100%; height: calc(100vh - 100px); }
+        #controls { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px; background-color: rgba(255, 255, 255, 0.8); display: flex; justify-content: space-between; }
+        #zoom-controls { display: flex; align-items: center; }
+        #download-button { margin-left: 10px; }
+        #room-description { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.3); z-index: 1000; }
+    </style>
+
+    <style>
+        /* Additional styles for scrollable content */
+        .scrollable-content {
+            max-height: 300px; /* Adjust the height as needed */
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="map" class="mazemap"></div>
+
+    <div id="controls">
+        <div id="zoom-controls">
+            <button id="zoom-in-button">Zoom In</button>
+            <button id="zoom-out-button">Zoom Out</button>
+        </div>
+        <button id="roomDetailsDownloadButton">Download All Room Photos</button>
+    </div>
+
+    <div id="room-description">
+        <h2 id="roomTitle">Room Details</h2>
+        <div class="scrollable-content">
+            <label for="roomPhoto">Upload Photo:</label>
+            <input type="file" accept="image/*" id="roomPhoto"><br><br>
+        </div>
+        <button id="storeDescriptionButton">Store Details</button>
+        <button id="cancelDescriptionButton">Cancel</button>
+    </div>
+
+    <script>
+        var myMap = new Mazemap.Map({
+            container: 'map',
+            campuses: 200,
+            center: {lng: 144.960882, lat: -37.799353},
+            zoom: 14.4,
+            zLevel: 1,
+            scrollZoom: true,
+            doubleClickZoom: true,
+            touchZoomRotate: true
+        });
+
+        myMap.on('load', function(){
+            myMap.on('click', onMapClick);
+        });
+
+        var selectedPoi; // Store the selected POI data
+        var roomPhotos = {}; // Store room photos
+
+        function onMapClick(e){
+            var lngLat = e.lngLat;
+            var zLevel = myMap.zLevel;
+
+            // Fetching via Data API
+            Mazemap.Data.getPoiAt(lngLat, zLevel).then( poi => {
+                selectedPoi = poi; // Store the selected POI data
+                showRoomDescriptionPopup();
+            }).catch( function(){ return false; } );
+        }
+
+        const roomTitle = document.getElementById('roomTitle');
+        const zoomInButton = document.getElementById('zoom-in-button');
+        const zoomOutButton = document.getElementById('zoom-out-button');
+        const roomDetailsDownloadButton = document.getElementById('roomDetailsDownloadButton');
+        const roomDescriptionPopup = document.getElementById('room-description');
+        const storeDescriptionButton = document.getElementById('storeDescriptionButton');
+        const cancelDescriptionButton = document.getElementById('cancelDescriptionButton');
+        const roomPhotoInput = document.getElementById('roomPhoto');
+
+        storeDescriptionButton.addEventListener('click', () => {
+            const photoFile = roomPhotoInput.files[0];
+
+            if (photoFile && selectedPoi) {
+                const roomIdentifier = selectedPoi.properties.identifier;
+                roomPhotos[roomIdentifier] = photoFile;
+
+                clearInputs();
+                hideRoomDescriptionPopup();
+            } else {
+                alert("Please select a photo and a room.");
+            }
+        });
+
+        cancelDescriptionButton.addEventListener('click', () => {
+            clearInputs();
+            hideRoomDescriptionPopup();
+        });
+
+        function clearInputs() {
+            roomPhotoInput.value = '';
+        }
+
+        function showRoomDescriptionPopup() {
+            roomTitle.textContent = `Room Details: ${selectedPoi.properties.identifier}`;
+            roomDescriptionPopup.style.display = 'block';
+        }
+
+        function hideRoomDescriptionPopup() {
+            roomDescriptionPopup.style.display = 'none';
+        }
+
+        // Zoom In and Zoom Out button click handlers
+        zoomInButton.addEventListener('click', () => {
+            myMap.zoomIn();
+        });
+
+        zoomOutButton.addEventListener('click', () => {
+            myMap.zoomOut();
+        });
+
+        roomDetailsDownloadButton.addEventListener('click', () => {
+            if (Object.keys(roomPhotos).length > 0) {
+                const zip = new JSZip();
+
+                for (const roomIdentifier in roomPhotos) {
+                    const photoFile = roomPhotos[roomIdentifier];
+                    zip.file(`${roomIdentifier}.jpg`, photoFile);
+                }
+
+                zip.generateAsync({ type: "blob" }).then(function (content) {
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = URL.createObjectURL(content);
+                    downloadLink.download = 'room_photos.zip';
+                    downloadLink.click();
+                });
+            } else {
+                alert("No photos to download.");
+            }
+        });
+    </script>
+</body>
+</html>
+Photo App Start Code
+Ben Slavec
+​
+​
+​
+​
+​
+Hey guys,
+
+Here's a start. Best of luck 🙂 
+
+Regards,
+
+ 
+
+Ben Slavec
+
+Digital Wayfinding Coordinator, Digital Estate.
+
+Campus Management, Business Services
+
+The University of Melbourne
+
+13-21 Bedford St North Melbourne VIC 3051
+

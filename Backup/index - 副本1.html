@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta name="viewport" id="vp" content="initial-scale=1.0,user-scalable=no,maximum-scale=1,width=device-width" />
+		<meta charset="utf-8" />
+
+		<link rel="stylesheet" href="https://api.mazemap.com/js/v2.0.103/mazemap.min.css">
+		<script type='text/javascript' src='https://api.mazemap.com/js/v2.0.103/mazemap.min.js'></script>
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+				font-size: 14px;
+				line-height: 1.42857143;
+				overflow: hidden;
+			}
+
+			#map {
+				width: 100%;
+				height: calc(100vh - 100px);
+			}
+
+			#controls {
+				position: fixed;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				padding: 10px;
+				background-color: rgba(255, 255, 255, 0.8);
+				display: flex;
+				justify-content: space-between;
+			}
+
+			#zoom-controls {
+				display: flex;
+				align-items: center;
+			}
+
+			#download-button {
+				margin-left: 10px;
+			}
+
+			#room-description {
+				display: none;
+				position: fixed;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				background: white;
+				padding: 20px;
+				box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.3);
+				z-index: 1000;
+			}
+		</style>
+
+		<style>
+			/* Additional styles for scrollable content */
+			.scrollable-content {
+				max-height: 300px;
+				/* Adjust the height as needed */
+				overflow: auto;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="map" class="mazemap"></div>
+
+		<div id="controls">
+			<div id="zoom-controls">
+				<button id="zoom-in-button">Zoom In</button>
+				<button id="zoom-out-button">Zoom Out</button>
+			</div>
+			<button id="roomDetailsDownloadButton">Download All Room Photos</button>
+		</div>
+
+		<div id="room-description">
+			<h2 id="roomTitle">Room Details</h2>
+			<div class="scrollable-content">
+				<label for="roomPhoto">Upload Photo:</label>
+				<input type="file" accept="image/*" id="roomPhoto" multiple><br><br>
+			</div>
+			<button id="storeDescriptionButton">Store Details</button>
+			<button id="cancelDescriptionButton">Cancel</button>
+		</div>
+
+		<script>
+			var myMap = new Mazemap.Map({
+				container: 'map',
+				campuses: 200,
+				center: {
+					lng: 144.960882,
+					lat: -37.799353
+				},
+				zoom: 14.4,
+				zLevel: 1,
+				scrollZoom: true,
+				doubleClickZoom: true,
+				touchZoomRotate: true
+			});
+
+			myMap.on('load', function() {
+				myMap.on('click', onMapClick);
+			});
+
+			var selectedPoi; // Store the selected POI data
+			var roomPhotos = {}; // Store room photos
+
+			function onMapClick(e) {
+				var lngLat = e.lngLat;
+				var zLevel = myMap.zLevel;
+
+				// Fetching via Data API
+				Mazemap.Data.getPoiAt(lngLat, zLevel).then(poi => {
+					selectedPoi = poi; // Store the selected POI data
+					showRoomDescriptionPopup();
+				}).catch(function() {
+					return false;
+				});
+			}
+
+			const roomTitle = document.getElementById('roomTitle');
+			const zoomInButton = document.getElementById('zoom-in-button');
+			const zoomOutButton = document.getElementById('zoom-out-button');
+			const roomDetailsDownloadButton = document.getElementById('roomDetailsDownloadButton');
+			const roomDescriptionPopup = document.getElementById('room-description');
+			const storeDescriptionButton = document.getElementById('storeDescriptionButton');
+			const cancelDescriptionButton = document.getElementById('cancelDescriptionButton');
+			const roomPhotoInput = document.getElementById('roomPhoto');
+
+			// storeDescriptionButton.addEventListener('click', () => {
+			// 	const photoFiles = roomPhotoInput.files;
+
+			// 	if (photoFiles.length > 0 && selectedPoi) {
+			// 		const roomIdentifier = selectedPoi.properties.identifier;
+			// 		roomPhotos[roomIdentifier] = Array.from(photoFiles);
+
+			// 		clearInputs();
+			// 		hideRoomDescriptionPopup();
+			// 	} else {
+			// 		alert("Please select at least one photo and a room.");
+			// 	}
+			// });
+
+			storeDescriptionButton.addEventListener('click', () => {
+				const photoFiles = roomPhotoInput.files;
+
+				if (photoFiles.length > 0 && selectedPoi) {
+					const roomIdentifier = selectedPoi.properties.identifier;
+					roomPhotos[roomIdentifier] = Array.from(photoFiles);
+
+					// 创建一个FormData对象
+					const formData = new FormData();
+
+					// 将每个文件添加到FormData
+					for (let i = 0; i < photoFiles.length; i++) {
+						const file = photoFiles[i];
+						formData.append('photos[]', file, `${roomIdentifier}_photo_${i + 1}.jpg`);
+					}
+
+					// 发送AJAX请求到服务器
+					const xhr = new XMLHttpRequest();
+					xhr.open('POST', 'upload.php'); // 修改为服务器上用于处理上传的脚本的URL
+					xhr.onload = function() {
+						if (xhr.status === 200) {
+							// 上传成功
+							console.log('Upload successful');
+						} else {
+							// 上传失败
+							console.log('Upload failed');
+						}
+					};
+					xhr.send(formData);
+
+					clearInputs();
+					hideRoomDescriptionPopup();
+				} else {
+					alert("Please select at least one photo and one room.");
+				}
+			});
+
+			cancelDescriptionButton.addEventListener('click', () => {
+				clearInputs();
+				hideRoomDescriptionPopup();
+			});
+
+			function showRoomDescriptionPopup() {
+				const roomIdentifier = selectedPoi.properties.identifier;
+				roomTitle.textContent = `Room Details - ${roomIdentifier}`;
+				roomDescriptionPopup.style.display = 'block';
+			}
+
+			function hideRoomDescriptionPopup() {
+				roomDescriptionPopup.style.display = 'none';
+			}
+
+			function clearInputs() {
+				roomPhotoInput.value = '';
+			}
+
+			zoomInButton.addEventListener('click', () => {
+				myMap.zoomIn();
+			});
+
+			zoomOutButton.addEventListener('click', () => {
+				myMap.zoomOut();
+			});
+
+			roomDetailsDownloadButton.addEventListener('click', () => {
+				// 创建一个隐藏的<a>标签
+				var link = document.createElement('a');
+				link.style.display = 'none';
+				document.body.appendChild(link);
+
+				// 设置下载链接属性
+				link.setAttribute('href', 'download.php');
+				link.setAttribute('download', 'photos.zip');
+
+				// 模拟点击下载链接
+				link.click();
+			});
+		</script>
+	</body>
+</html>
+
+
+
+<!-- 后端
+
+<?php
+header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] != 'POST') {
+    echo json_encode(['result' => false, 'msg' => 'Invalid request.', 'data' => []]);
+    exit;
+}
+
+if (!isset($_FILES['photos'])) {
+    echo json_encode(['result' => false, 'msg' => 'No files uploaded.', 'data' => []]);
+    exit;
+}
+
+$targetDir = 'pic/';
+
+if (!file_exists($targetDir)) {
+    mkdir($targetDir, 0777, true);
+}
+
+$uploadedFiles = $_FILES['photos'];
+$numFiles = count($uploadedFiles['name']);
+
+$errLog = [];
+
+for ($i = 0; $i < $numFiles; $i++) {
+    $tempFilePath = $uploadedFiles['tmp_name'][$i];
+    $originalFileName = $uploadedFiles['name'][$i];
+    
+    // 更改文件名：将分号（;）替换为下划线（_）
+    $newFileName = str_replace(';', '_', $originalFileName);
+
+    $targetFilePath = $targetDir . $newFileName;
+
+    $saveResult = move_uploaded_file($tempFilePath, $targetFilePath);
+
+    if (!$saveResult) {
+        $errLog[] = $originalFileName;
+    }
+}
+
+if (empty($errLog)) {
+    echo json_encode(['result' => true, 'msg' => 'all success', 'data' => []]);
+    exit;
+}
+
+echo json_encode(['result' => false, 'msg' => 'occur err', 'data' => $errLog]);
+exit;
+?>
+
+
+<?php
+$photoDirectory = 'pic/';  // 照片目录路径，替换为实际的目录路径
+
+// 获取pic文件夹内的所有照片文件
+$photos = [];
+$files = scandir($photoDirectory);
+foreach ($files as $file) {
+    if ($file !== '.' && $file !== '..') {
+        $photos[] = $file;
+    }
+}
+
+// 创建ZIP文件
+$zip = new ZipArchive();
+$zipName = 'photos.zip';
+$zip->open($zipName, ZipArchive::CREATE);
+
+// 添加照片到ZIP文件中，并将照片名称中的下划线替换为分号
+foreach ($photos as $photo) {
+    $modifiedName = str_replace('_', ';', $photo);
+    $zip->addFile($photoDirectory . $photo, $modifiedName);
+}
+
+// 关闭ZIP文件
+$zip->close();
+
+// 设置响应头，以便浏览器下载ZIP文件
+header('Content-Type: application/zip');
+header('Content-Disposition: attachment; filename="' . $zipName . '"');
+header('Content-Length: ' . filesize($zipName));
+
+// 输出ZIP文件内容
+readfile($zipName);
+
+// 删除服务器上的ZIP文件
+unlink($zipName);
+?>
+
+-->
